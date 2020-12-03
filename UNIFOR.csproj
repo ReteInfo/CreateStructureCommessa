@@ -4,10 +4,12 @@
     <AzureFunctionsVersion>v3</AzureFunctionsVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Graph" Version="3.19.0" />
-    <PackageReference Include="Microsoft.Graph.Auth" Version="1.0.0-preview.5" />
-    <PackageReference Include="Microsoft.Identity.Client" Version="4.22.0" />
-    <PackageReference Include="Microsoft.NET.Sdk.Functions" Version="3.0.7" />
+    <PackageReference Include="Microsoft.Graph" Version="3.19.0"/>
+    <PackageReference Include="Microsoft.Graph.Auth" Version="1.0.0-preview.5"/>
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.22.0"/>
+    <PackageReference Include="Microsoft.NET.Sdk.Functions" Version="3.0.11"/>
+    <PackageReference Include="Microsoft.SharePointOnline.CSOM" Version="16.1.20616.12000"/>
+    <PackageReference Include="SharePointPnPCoreOnline" Version="3.27.2011"/>
   </ItemGroup>
   <ItemGroup>
     <None Update="host.json">
