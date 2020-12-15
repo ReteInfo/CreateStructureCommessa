@@ -11,19 +11,22 @@ using Newtonsoft.Json;
 using Microsoft.Online.SharePoint.TenantAdministration;
 using System.Text.RegularExpressions;
 using System.ComponentModel;
+using Microsoft.Extensions.Logging;
 
 namespace Company.Function
 {
     static class Documents
     {
         private static string _MMS = "08849a00032a4803a870e0addbaf5a9c";
-        //Gruppo Unifor nel term store
+        public static string siteUrl = "https://reteinformatica.sharepoint.com/sites/";
+        
         private static string _TermGroup = "22e57a67-4f40-4463-8ec6-21f17af008e1";
         private static string _GroupColumn = "Unifor";
         private static string _nameContentType = "UniforDoc";
         private static string _ListConfig = "Configurations";
         private static string _ListLibraryName = "Documents";
         private static string _internalNameList = "Shared Documents";
+        
         
         
 
@@ -41,25 +44,33 @@ namespace Company.Function
           };
 
    
-    public static string GetDefaultFolderValues(SPClient.List sourceList)
+    public static string GetDefaultFolderValues(SPClient.List sourceList,ILogger log)
        {
-            var sourceContext = (ClientContext)sourceList.Context;
+           try
+           {
+               var sourceContext = (ClientContext)sourceList.Context;
 
-            SPClient.Folder formsFolder =
-            sourceContext.Web.GetFolderByServerRelativeUrl(sourceList.RootFolder.ServerRelativeUrl + "/forms");
+                SPClient.Folder formsFolder =
+                sourceContext.Web.GetFolderByServerRelativeUrl(sourceList.RootFolder.ServerRelativeUrl + "/forms");
 
-            sourceContext.Load(formsFolder, f => f.Files);
-            sourceContext.ExecuteQuery();
+                sourceContext.Load(formsFolder, f => f.Files);
+                sourceContext.ExecuteQuery();
 
-            SPClient.File clientLocationBasedDefaultsFile =
-                formsFolder.Files.FirstOrDefault(
-                    f => f.Name.ToLowerInvariant() == "client_LocationBasedDefaults.html".ToLowerInvariant());
+                SPClient.File clientLocationBasedDefaultsFile =
+                    formsFolder.Files.FirstOrDefault(
+                        f => f.Name.ToLowerInvariant() == "client_LocationBasedDefaults.html".ToLowerInvariant());
 
-            if (clientLocationBasedDefaultsFile != null)
-            {
-                return ReadFileContent(clientLocationBasedDefaultsFile);
-            }
-            return null;
+                if (clientLocationBasedDefaultsFile != null)
+                {
+                    return ReadFileContent(clientLocationBasedDefaultsFile);
+                }
+                return null;
+           }
+           catch (System.Exception e)
+           {
+               log.LogError("Errore recupero deafult folder, source list {0}: {1}",sourceList,e.Message);
+               throw e;
+           }
       }
 
         public static string ReadFileContent(SPClient.File file)
@@ -74,7 +85,7 @@ namespace Company.Function
         }
 
 
-        public static string getTaxonomyTermGroup(ClientContext clientContext,string termName)
+        public static string getTaxonomyTermGroup(ClientContext clientContext,string termName, ILogger log)
         {
             try
             {
@@ -121,13 +132,14 @@ namespace Company.Function
             }
             catch (Exception e)
             {
-                Console.WriteLine("Errore recupero term group " + "// " + e.Message);
+                log.LogError("Errore recupero id term group taxonomy, source list: {1}",e.Message);
+                //Console.WriteLine("Errore recupero term group " + "// " + e.Message);
                 throw new Exception("Errore Recupero id term group: " + e.Message);
             }
         
         }
 
-        public static List<string> getValueTermSet(ClientContext clientContext,string termSetName)
+        public static List<string> getValueTermSet(ClientContext clientContext,string termSetName,ILogger log)
         {
             List<string> allLabels = new List<string>();
             try
@@ -171,12 +183,13 @@ namespace Company.Function
             }
             catch (Exception e)
             {
+                log.LogError("Errore recupero valori term set: {1}",e.Message);
                 throw e;
             }
         
         }
 
-        public static string getIdTermSet(ClientContext clientContext,string termSetName)
+        public static string getIdTermSet(ClientContext clientContext,string termSetName,ILogger log)
         {
             var termSetId = "";
             try
@@ -209,13 +222,14 @@ namespace Company.Function
             }
             catch (Exception e)
             {
+                log.LogError("Errore recupero ID term set: {1}",e.Message);
                 throw e;
             }
         
         }
 
         public static void setDefaulValueColumn(ClientContext context,
-            string pathFolder,string nameTerm,string valueTerm){
+            string pathFolder,string nameTerm,string valueTerm,ILogger log){
 
                 try
                 {
@@ -237,12 +251,13 @@ namespace Company.Function
                 }
                 catch (Exception e )
                 {
-                    Console.WriteLine("Errore set metadata to column " + e.Message);
+                    log.LogError("Errore impostazione default column: {1}",e.Message);
+                    //Console.WriteLine("Errore set metadata to column " + e.Message);
                     throw new Exception("Errore set metadata to column: " + e.Message);
                 }
         }
 
-        public static void CreateFolder(ClientContext context, string siteUrl,string relativePath,string folderName)
+        public static void CreateFolder(ClientContext context, string siteUrl,string relativePath,string folderName,ILogger log)
         {
 
             try
@@ -263,7 +278,8 @@ namespace Company.Function
             }
             catch (Exception e)
             {
-              Console.WriteLine("Errore Creazione folder " + relativePath + " " + folderName + " //" + e.Message);
+                log.LogError("Errore creazione folder: {1}",e.Message);
+              //Console.WriteLine("Errore Creazione folder " + relativePath + " " + folderName + " //" + e.Message);
               throw new Exception("Errore creazione folder: " +e.Message);
             }
     
@@ -273,7 +289,7 @@ namespace Company.Function
 
 
 
-    public static void createContentType(ClientContext context)
+    public static void createContentType(ClientContext context,ILogger log)
     {
       try
       {
@@ -294,6 +310,7 @@ namespace Company.Function
       }
       catch (Exception e)
       {
+        log.LogError("Errore creazione content-type: {1}",e.Message);
         if(e.HResult == -2146233079){
             throw new Exception("c-404");
         }else{
@@ -303,32 +320,32 @@ namespace Company.Function
     }
 
 
-    public static void createTextOrChoiceColumn(ClientContext context, string internalNameColumn, string displayName, string typeColumn)
+    public static void createTextOrChoiceColumn(ClientContext context, string internalNameColumn, string displayName, string typeColumn,ILogger log)
     {
-        //string jsonFormat = @"'$schema': 'https://developer.microsoft.com/json-schemas/sp/v2/column-formatting.schema.json','elmType': 'button','customRowAction': {'action': 'executeFlow','actionParams': {'id': '18a46964-ffed-42a5-9e1a-ff3cff633251'}},'attributes': {'class': 'ms-fontColor-themePrimary ms-fontColor-themeDarker--hover'},'style': {'border': 'none','background-color': '#456275','cursor': 'pointer','display': 'Block'},'children': [{'elmType': 'span','attributes': {'iconName': 'Play'},'style': {'color': 'white','padding-right': '6px'}},{'elmType': 'span','txtContent': '=if([$RequestStatus]=='','Pubblica',@currentField)','style': {'color': 'white','padding-right': '6px'}}]";
-        //var jsonFormat = JsonConvert.SerializeObject(@"{""$schema"":""https://developer.microsoft.com/json-schemas/sp/v2/column-formatting.schema.json"",""elmType"": ""button"",""customRowAction"": {""action"": ""executeFlow"",""actionParams"": {""id"": ""18a46964-ffed-42a5-9e1a-ff3cff633251""}},""attributes"": {""class"": ""ms-fontColor-themePrimary ms-fontColor-themeDarker--hover""},""style"": {""border"": ""none"",""background-color"": ""#456275"",""cursor"":""pointer"",""display"":""Block""},""children"": [{""elmType"": ""span"",""attributes"": {""iconName"": ""Play""},""style"": {""color"": ""white"",""padding-right"": ""6px""}},{""elmType"": ""span"",""txtContent"": ""=if([$RequestStatus]=="",""Pubblica"",@currentField)"",""style"": {""color"": ""white"",""padding-right"": ""6px""}}]}");
-        var flow = new JsonObject();
-        flow.Schema = "https://developer.microsoft.com/json-schemas/sp/v2/column-formatting.schema.json";
-        flow.elmType = "button";
-        flow.customRowAction = new CustomRowAction(){
-            action = "executeFlow",
-            actionParams = "{\"id\": \"18a46964-ffed-42a5-9e1a-ff3cff633251\"}"
-        };
-        flow.attributes = new Attributes(){@class = "ms-fontColor-themePrimary ms-fontColor-themeDarker--hover"};
-        flow.style = new Style(){border = "none",BackgroundColor = "#456275",cursor = "pointer",display="block"};
-        flow.children = new List<Child>(){
-            new Child(){
-                elmType = "span",
-                attributes = new Attributes2(){iconName = "Play"},
-                style = new Style2(){color="white",PaddingRight="6px"}
-            },
-            new Child(){
-                elmType = "span",
-                txtContent = "Pubblica",
-                style = new Style2(){color="white",PaddingRight="6px"}
-            }
-        };
-        var jsonFormat = JsonConvert.SerializeObject(flow);
+        try
+        {
+            var flow = new JsonObject();
+            flow.Schema = "https://developer.microsoft.com/json-schemas/sp/v2/column-formatting.schema.json";
+            flow.elmType = "button";
+            flow.customRowAction = new CustomRowAction(){
+                action = "executeFlow",
+                actionParams = "{\"id\": \"18a46964-ffed-42a5-9e1a-ff3cff633251\"}"
+            };
+            flow.attributes = new Attributes(){@class = "ms-fontColor-themePrimary ms-fontColor-themeDarker--hover"};
+            flow.style = new Style(){border = "none",BackgroundColor = "#456275",cursor = "pointer",display="block"};
+            flow.children = new List<Child>(){
+                new Child(){
+                    elmType = "span",
+                    attributes = new Attributes2(){iconName = "Play"},
+                    style = new Style2(){color="white",PaddingRight="6px"}
+                },
+                new Child(){
+                    elmType = "span",
+                    txtContent = "Pubblica",
+                    style = new Style2(){color="white",PaddingRight="6px"}
+                }
+            };
+            var jsonFormat = JsonConvert.SerializeObject(flow);
             string schemaXml = "";
             Web rootWeb = context.Site.RootWeb;
             if (typeColumn == "multiline")
@@ -365,8 +382,15 @@ namespace Company.Function
               sessionContentType.Update(true);
               context.ExecuteQuery();
         }
+        catch (System.Exception e)
+        {
+            log.LogError("Errore creazione colonna: {1}",e.Message);
+            throw e;
+        }
+        
+    }
 
-        public static void createColumns(ClientContext context)
+        public static void createColumns(ClientContext context,ILogger log)
         {
             //recupero id del term set
             Web rootWeb = context.Site.RootWeb;
@@ -395,25 +419,22 @@ namespace Company.Function
                     taxonomyField.IsPathRendered = true;
                   }
                   taxonomyField.Update();
-
-                  
-
                   sessionContentType.FieldLinks.Add(new FieldLinkCreationInformation
                   {
                     Field = field
                   });
-
                   sessionContentType.Update(true);
-                  
+            
                 }
                 catch (Exception e)
                 {
-                  Console.WriteLine("Errore creazione colonna: " + displayName + " " + e.Message);
-                  throw new Exception("Errore creazione Colonna: " + e.Message);
+                    log.LogError("Errore creazioen colonne {0}",e.Message);
+                  //Console.WriteLine("Errore creazione colonna: " + displayName + " " + e.Message);
+                    throw new Exception("Errore creazione Colonna: " + e.Message);
                 }
             }
             context.ExecuteQuery();
-          }
+        }
 
 
     public static ContentType GetByName(this ContentTypeCollection cts, string name)
@@ -424,7 +445,7 @@ namespace Company.Function
             return Enumerable.FirstOrDefault(cts, ct => ct.Name == name);
         }
 
-        public static void createColumnToSiteColumn(ClientContext context, string internalNameColumn, string displayName)
+        public static void createColumnToSiteColumn(ClientContext context, string internalNameColumn, string displayName,ILogger log)
         {
             string column;
             if (columnContentType.TryGetValue(internalNameColumn, out column))
@@ -462,7 +483,8 @@ namespace Company.Function
                   }
                   catch (Exception e)
                   {
-                      Console.WriteLine("Errore creazione colonna: " + displayName + " " + e.Message);
+                      log.LogError("Errore creazione colonna a livello di site column: {0}",e.Message);
+                      //Console.WriteLine("Errore creazione colonna: " + displayName + " " + e.Message);
                       throw new Exception("Errore creazione Colonna: " + e.Message) ;
                   }
             }
@@ -471,7 +493,7 @@ namespace Company.Function
 
        
 
-          public static void setContentTypeToList(ClientContext clientContext){
+          public static void setContentTypeToList(ClientContext clientContext,ILogger log){
             try
             {
                 ContentTypeCollection contentTypeCollection;
@@ -511,13 +533,14 @@ namespace Company.Function
             }
             catch (System.Exception e)
             {
-                Console.WriteLine("Errore aggiunta content type alla document Library- " + e.Message);
+                log.LogError("Errore impostazione content-type  a livello di lista: {0}",e.Message);
+                //Console.WriteLine("Errore aggiunta content type alla document Library- " + e.Message);
                 throw new Exception("Errore set Content Type to list: " + e.Message);
             }
             
         }
 
-        public static void setViewList(ClientContext clientContext, string checkTeam){
+        public static void setViewList(ClientContext clientContext, string checkTeam,ILogger log){
             try
             {
                 List targetList = clientContext.Web.Lists.GetByTitle(_ListLibraryName);
@@ -546,12 +569,13 @@ namespace Company.Function
             }
             catch (System.Exception e)
             {
-                Console.WriteLine("Errore impostazione vista di default " + e.Message);
+                log.LogError("Errore impostazione della vista: {0}",e.Message);
+                //Console.WriteLine("Errore impostazione vista di default " + e.Message);
                 throw new Exception("Errore set view: " + e.Message);
             }            
         }
 
-        public static void createViewList(ClientContext clientContext, string nameView,string typeChannel){
+        public static void createViewList(ClientContext clientContext, string nameView,string typeChannel,ILogger log){
             try
             {
                 List targetList = clientContext.Web.Lists.GetByTitle(_ListLibraryName);
@@ -578,7 +602,8 @@ namespace Company.Function
             }
             catch (System.Exception e)
             {
-                Console.WriteLine("Errore creazione della vista " + e.Message);
+                log.LogError("Errore creazione della vista: {0}",e.Message);
+                //Console.WriteLine("Errore creazione della vista " + e.Message);
                 throw new Exception("Errore create view: " +e.Message);
             }
             

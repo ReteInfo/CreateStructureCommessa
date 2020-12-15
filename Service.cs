@@ -12,77 +12,90 @@ using Microsoft.SharePoint.Client.DocumentManagement;
 using Newtonsoft.Json;
 using Microsoft.Online.SharePoint.TenantAdministration;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 
 namespace Company.Function
 {
     public static class Service
     {
 
-        private static string _UrlHubSite = "https://reteinformatica.sharepoint.com/sites/Commesse";
+        //private static string _UrlHubSite = Environment.GetEnvironmentVariable("urlHubSite");
+        private static string _UrlHubSite = "https://uniforspa.sharepoint.com/sites/Commesse";
+        //private static string _urlFunctionStructure = Environment.GetEnvironmentVariable("EndpointFunction");
         private static string _urlFunctionStructure = "http://localhost:7071/api/CreateTeamStructure?name=";
         private static string _configListCommesseCreate = "Elenco Commesse Create";
+        private static string _configList = "Configurations";
 
-        public static void insertObjectToListConfig(string token,TeamCommessa objectTeam){
-        try
-        {
-            using (ClientContext clientContext = new ClientContext(_UrlHubSite))
+        public static void insertObjectToListConfig(string token,TeamCommessa objectTeam, ILogger log){
+            try
             {
-                clientContext.ExecutingWebRequest += (sender, e) =>
+                using (ClientContext clientContext = new ClientContext(_UrlHubSite))
                 {
-                    e.WebRequestExecutor.RequestHeaders["Authorization"] = "Bearer " + token;
-                };
-                List targetList = clientContext.Web.Lists.GetByTitle(_configListCommesseCreate);
-                
-                ListItemCreationInformation oListItemCreationInformation = new ListItemCreationInformation();
-                ListItem oItem = targetList.AddItem(oListItemCreationInformation);
-                oItem["Title"] = Regex.Replace(objectTeam.NameTeam, @" ", "");
-                oItem["ConfigurationObject"] = JsonConvert.SerializeObject(objectTeam);
-                oItem["CreazioneStrutture"] = _urlFunctionStructure+Regex.Replace(objectTeam.NameTeam, @" ", "");
-                oItem["Stato"] = "Strutture da creare";
-                
-                oItem.Update();
-                clientContext.ExecuteQuery();
-            }
-        }
-        catch (System.Exception e)
-        {
-            Console.WriteLine(e.Message + " " + e.StackTrace);
-            throw e;
-        }
-    }
-
-        public static string getValueConfigFile(string nameJson,string token)
-        {
-            var  config = "";
-            
-            using(var clientContext = new ClientContext(_UrlHubSite)){
-                clientContext.ExecutingWebRequest += (sender, e) =>
-                {
-                    e.WebRequestExecutor.RequestHeaders["Authorization"] = "Bearer " + token;
-                };   
-
-
-                SPClient.List oList = clientContext.Web.Lists.GetByTitle("Configurations");
-
-                CamlQuery camlQuery = new CamlQuery();
-                camlQuery.ViewXml = $"<View><Query><Where><Eq><FieldRef Name='Title'/>" +
-                    "<Value Type='Text'>"+nameJson+"</Value></Eq></Where></Query></View>";
-
-                ListItemCollection collListItem = oList.GetItems(camlQuery);
-
-                clientContext.Load(collListItem);
-
-                clientContext.ExecuteQuery();
-
-                foreach (var item in collListItem)
-                {
-                    config = item["Value"].ToString();
+                    clientContext.ExecutingWebRequest += (sender, e) =>
+                    {
+                        e.WebRequestExecutor.RequestHeaders["Authorization"] = "Bearer " + token;
+                    };
+                    List targetList = clientContext.Web.Lists.GetByTitle(_configListCommesseCreate);
+                    
+                    ListItemCreationInformation oListItemCreationInformation = new ListItemCreationInformation();
+                    ListItem oItem = targetList.AddItem(oListItemCreationInformation);
+                    oItem["Title"] = Regex.Replace(objectTeam.NameTeam, @" ", "");
+                    oItem["ConfigurationObject"] = JsonConvert.SerializeObject(objectTeam);
+                    oItem["CreazioneStrutture"] = _urlFunctionStructure+Regex.Replace(objectTeam.NameTeam, @" ", "");
+                    oItem["Stato"] = "Strutture da creare";
+                    
+                    oItem.Update();
+                    clientContext.ExecuteQuery();
                 }
-
             }
-            return config;
+            catch (System.Exception e)
+            {
+                log.LogError("Errore inserimento oggetto commessa nell'elenco commesse - Elenco commesse create: {0}",e.Message);
+                throw e;
+            }
         }
-    public static void updateObjectToListConfig(string token,TeamCommessa objectTeam,string message,string stato){
+
+        public static string getValueConfigFile(string nameJson,string token, ILogger log)
+        {
+            try
+            {
+                var  config = "";
+            
+                using(var clientContext = new ClientContext(_UrlHubSite)){
+                    clientContext.ExecutingWebRequest += (sender, e) =>
+                    {
+                        e.WebRequestExecutor.RequestHeaders["Authorization"] = "Bearer " + token;
+                    };   
+
+
+                    SPClient.List oList = clientContext.Web.Lists.GetByTitle(_configList);
+
+                    CamlQuery camlQuery = new CamlQuery();
+                    camlQuery.ViewXml = $"<View><Query><Where><Eq><FieldRef Name='Title'/>" +
+                        "<Value Type='Text'>"+nameJson+"</Value></Eq></Where></Query></View>";
+
+                    ListItemCollection collListItem = oList.GetItems(camlQuery);
+
+                    clientContext.Load(collListItem);
+
+                    clientContext.ExecuteQuery();
+
+                    foreach (var item in collListItem)
+                    {
+                        config = item["Value"].ToString();
+                    }
+
+                }
+                return config;
+            }
+            catch (System.Exception e)
+            {
+                log.LogError("Errore recupero oggetto dalla lista - Configurations : {0}",e.Message);
+                throw e;
+            }
+        }
+
+    public static void updateObjectToListConfig(string token,TeamCommessa objectTeam,string message,string stato,ILogger log){
         try
         {
             var note = "";
@@ -131,12 +144,13 @@ namespace Company.Function
         }
         catch (System.Exception e)
         {
-            Console.WriteLine(e.Message + " " + e.StackTrace);
+            log.LogError("Errore aggiornamento oggetto commessa nell'elenco commesse: {0}",e.Message);
+            //Console.WriteLine(e.Message + " " + e.StackTrace);
             throw e;
         }
     }
 
-    public static TeamCommessa getObjectToListConfig(string token,string nameTeam){
+    public static TeamCommessa getObjectToListConfig(string token,string nameTeam,ILogger log){
         try
         {
             var stato = "";
@@ -178,16 +192,17 @@ namespace Company.Function
         }
         catch (System.Exception e)
         {
-            Console.WriteLine(e.Message + " " + e.StackTrace);
+            log.LogError("Errore recupero oggetto commessa nell'elenco commesse: {0}",e.Message);
+            //Console.WriteLine(e.Message + " " + e.StackTrace);
             throw e;
         }
     }
     
-        public static async Task<List<string>> getIdUserFromEmail(graph.GraphServiceClient graphClient,List<string> emails){
+        public static async Task<List<string>> getIdUserFromEmail(graph.GraphServiceClient graphClient,List<string> emails,ILogger log){
             List<string> guids = new List<string>();
+            var email = "";
             try
             {
-                var email = "";
                 foreach (var item in emails)
                 {
                   try
@@ -200,22 +215,22 @@ namespace Company.Function
                   }
                   catch (System.Exception e)
                   {
-                    Console.WriteLine("Errore recupero GUID user con email: " + email + " errore " + e.Message);
+                    //Console.WriteLine("Errore recupero GUID user con email: " + email + " errore " + e.Message);
                     continue;
                   }
 
                 }
-              }
+            }
             catch (Exception e)
             {
-                Console.WriteLine("Errore recupero email utente " + e.Message);    
+                log.LogError("Errore recupero id utente dall'email: {0} : {1}",email, e.Message);    
                 throw e;
             }
             
             return guids;
         }
 
-        public async static Task<graph.Group> createGroup(graph.GraphServiceClient graphServiceClient, string nameTeam, string nameTeamEmail)
+        public async static Task<graph.Group> createGroup(graph.GraphServiceClient graphServiceClient, string nameTeam, string nameTeamEmail, ILogger log)
         {
             try
             {
@@ -240,13 +255,14 @@ namespace Company.Function
             }
             catch (System.Exception e)
             {
-                Console.WriteLine("Errore creazione gruppo " + e.Message);
+                //Console.WriteLine("Errore creazione gruppo " + e.Message);
+                log.LogError("ERRORE creazione gruppo: {0}",e.Message);
                 throw e;
             }
 
         }
 
-        public async static Task<graph.Team> createTeam(graph.GraphServiceClient graphServiceClient, string idGroup,string nameTeam)
+        public async static Task<graph.Team> createTeam(graph.GraphServiceClient graphServiceClient, string idGroup,string nameTeam,ILogger log)
         {
             try
             {
@@ -263,16 +279,17 @@ namespace Company.Function
             }
             catch (System.Exception e)
             {
-                Console.WriteLine("Errore creazione team " + e.Message);
+                log.LogError("ERRORE creazione team:{0}",e.Message);
+                //Console.WriteLine("Errore creazione team " + e.Message);
                 throw e;
             }
             
         }
 
-        public static  void associateToHubSite(string urlSiteToAssociate){
+        public static  void associateToHubSite(string urlSiteToAssociate,ILogger log){
         try
         {
-            var token = Authentication.authHubSite().Result;
+            var token = Authentication.authHubSite(log).Result;
             using (var clientContext = new ClientContext(Authentication.resourceAdmin))
             {
                 clientContext.ExecutingWebRequest += (sender, e) =>
@@ -282,17 +299,18 @@ namespace Company.Function
                 var tenant = new Tenant(clientContext);   
 
                 tenant.ConnectSiteToHubSite(urlSiteToAssociate, _UrlHubSite);
-                clientContext.ExecuteQuery(); 
+                clientContext.ExecuteQuery();
+                log.LogInformation("Sito {0} associato all'hub site",urlSiteToAssociate);
             }
         }
         catch (System.Exception e)
         {
-            Console.WriteLine(e.Message + " " + e.StackTrace);
-            throw new Exception("Errore Hub site");
+            log.LogInformation("Errore associazione sito all'Hub site: {1}",e.Message);
+            throw new Exception("Errore associazione all' Hub site");
         }
     }
 
-        public async static Task<graph.Channel> createChannel(graph.GraphServiceClient graphServiceClient,string teamId,string ownerId,string nameChannel)
+        public async static Task<graph.Channel> createChannel(graph.GraphServiceClient graphServiceClient,string teamId,string ownerId,string nameChannel,ILogger log)
         {
 
             try
@@ -321,16 +339,19 @@ namespace Company.Function
             }
             catch (System.Exception e)
             {
-                Console.WriteLine("Errore creazione canale " + nameChannel + " " + e.Message);
+                log.LogError("Errore creazione canale {0}: {1}",nameChannel,e.Message);
+                //Console.WriteLine("Errore creazione canale " + nameChannel + " " + e.Message);
                 throw e;
             }
         }
 
         //GESTIONE DEI MEMBRI E OWNER
-        public async static Task addMoreOwnerToChannel(graph.GraphServiceClient graphServiceClient,string teamId,string channelId,List<string> owners)
-        {            
+        public async static Task addMoreOwnerToChannel(graph.GraphServiceClient graphServiceClient,string teamId,string channelId,List<string> owners,ILogger log)
+        {          
+            var owner = "";  
             foreach (var item2 in owners)
             {
+                owner = item2;
                 try
                 {
                     var conversationMember = new graph.AadUserConversationMember
@@ -348,20 +369,21 @@ namespace Company.Function
                 }
                 catch (System.Exception e)
                 {
-                    Console.WriteLine("Errore aggiunta owner al canale " + e.Message);
+                    log.LogError("Errore aggiunta owner {0} al canale {1}: {2}",owner,channelId,e.Message);
+                    //Console.WriteLine("Errore aggiunta owner al canale " + e.Message);
                     continue;
                 }
                 
             }
         }
-        public async static Task addMemberToChannel(graph.GraphServiceClient graphServiceClient, string teamId, string channelId,List<string> memberId)
+        public async static Task addMemberToChannel(graph.GraphServiceClient graphServiceClient, string teamId, string channelId,List<string> memberId,ILogger log)
         {
-            
-
+            var member = "";
             foreach (var item2 in memberId)
             {
                 try
                 {
+                    member = item2;
                     var conversationMember = new graph.AadUserConversationMember
                     {
                         Roles = new List<String>()
@@ -380,22 +402,22 @@ namespace Company.Function
                 }
                 catch (System.Exception e)
                 {
-                    Console.WriteLine("Errore aggiunta membro al canale" + e.Message);
+                    log.LogError("Errore aggiunta member {0} al canale {1}: {2}",member,channelId,e.Message);
+                    //Console.WriteLine("Errore aggiunta membro al canale" + e.Message);
                     throw e;
-                }
-                
-                
+                }  
             }
         }
-        public async static Task addOwnerToGroup(graph.GraphServiceClient graphServiceClient,string idGroup, List<string> idOwners)
+        public async static Task addOwnerToGroup(graph.GraphServiceClient graphServiceClient,string idGroup, List<string> idOwners, ILogger log)
         {
+            var owner = "";
             foreach (var item in idOwners)
             {
                 try
                 {
+                    owner = item;
                     var directoryObject = new graph.DirectoryObject
                     {
-                        //GUID di Simone Ferrazzo come owner
                         Id = item
                     };
                     //id del gruppo creato
@@ -405,7 +427,8 @@ namespace Company.Function
                 }
                 catch (System.Exception e)
                 {
-                    Console.WriteLine("Errore aggiunta owner al gruppo " + e.Message);
+                    log.LogError("Errore aggiunta owner {0} al gruppo : {1}",owner, e.Message);
+                    //Console.WriteLine("Errore aggiunta owner al gruppo " + e.Message);
                     continue;
                 }
                 
@@ -413,11 +436,13 @@ namespace Company.Function
 
         }
 
-        public async static Task addMemberToGroup(graph.GraphServiceClient graphServiceClient, string idGroup, List<string> idMembers)
+        public async static Task addMemberToGroup(graph.GraphServiceClient graphServiceClient, string idGroup, List<string> idMembers,ILogger log)
         {
+            var member = "";
             foreach (var item in idMembers)
             {
                 try{
+                    member = item;
                     var directoryObject = new graph.DirectoryObject
                     {
                         Id = item
@@ -426,8 +451,10 @@ namespace Company.Function
                     await graphServiceClient.Groups[idGroup].Members.References
                         .Request()
                         .AddAsync(directoryObject);
+
                 }catch(Exception e){
-                    Console.WriteLine("Errore aggiunta membro al gruppo " + e.Message);
+                    log.LogError("ERRORE aggiunta membro {0} al gruppo: {1}",member,e.Message);
+                    //Console.WriteLine("Errore aggiunta membro al gruppo " + e.Message);
                     continue;
                 }
                 
